@@ -161,9 +161,11 @@ const Index = () => {
         
         <header className="text-center mb-12 animate-fade-in">
           <div className="flex items-center justify-center gap-3 mb-4">
-            <div className="w-16 h-16 bg-gradient-to-br from-lavender-300 to-lavender-400 rounded-3xl flex items-center justify-center animate-float shadow-lg">
-              <Icon name="Sparkles" size={32} className="text-white" />
-            </div>
+            <img 
+              src="https://cdn.poehali.dev/files/ddf54971-37ad-40b1-8246-fa08637d7624.jpg" 
+              alt="Психоразгрузка" 
+              className="w-24 h-24 object-contain animate-float"
+            />
           </div>
           <h1 className="text-4xl font-bold text-foreground mb-2">Психоразгрузка</h1>
           <p className="text-muted-foreground text-lg">Ваше пространство для спокойствия</p>

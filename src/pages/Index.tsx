@@ -18,8 +18,10 @@ const Index = () => {
   const [meditationSeconds, setMeditationSeconds] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [showTrialModal, setShowTrialModal] = useState(false);
-  const [activeSoundIndex, setActiveSoundIndex] = useState<number | null>(null);
+  const [activeSounds, setActiveSounds] = useState<Set<number>>(new Set());
+  const [soundVolumes, setSoundVolumes] = useState<{[key: number]: number}>({});
   const meditationIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const audioRefs = useRef<{[key: number]: HTMLAudioElement}>({});
 
   useEffect(() => {
     if (isPlaying && (meditationTimer > 0 || meditationSeconds > 0)) {
@@ -72,8 +74,56 @@ const Index = () => {
     setIsPlaying(!isPlaying);
   };
 
+  useEffect(() => {
+    return () => {
+      Object.values(audioRefs.current).forEach(audio => {
+        audio.pause();
+        audio.src = '';
+      });
+    };
+  }, []);
+
   const toggleSound = (index: number) => {
-    setActiveSoundIndex(activeSoundIndex === index ? null : index);
+    const newActiveSounds = new Set(activeSounds);
+    
+    if (newActiveSounds.has(index)) {
+      newActiveSounds.delete(index);
+      if (audioRefs.current[index]) {
+        audioRefs.current[index].pause();
+      }
+    } else {
+      newActiveSounds.add(index);
+      if (!audioRefs.current[index]) {
+        const audio = new Audio();
+        audio.loop = true;
+        audio.volume = soundVolumes[index] !== undefined ? soundVolumes[index] / 100 : 0.5;
+        audioRefs.current[index] = audio;
+      }
+      
+      const soundUrls: {[key: number]: string} = {
+        0: 'https://assets.mixkit.co/active_storage/sfx/2393/2393-preview.mp3',
+        1: 'https://assets.mixkit.co/active_storage/sfx/2390/2390-preview.mp3',
+        2: 'https://assets.mixkit.co/active_storage/sfx/2398/2398-preview.mp3',
+        3: 'https://assets.mixkit.co/active_storage/sfx/2462/2462-preview.mp3',
+        4: 'https://assets.mixkit.co/active_storage/sfx/2395/2395-preview.mp3',
+        5: 'https://assets.mixkit.co/active_storage/sfx/2394/2394-preview.mp3',
+      };
+      
+      if (audioRefs.current[index]) {
+        audioRefs.current[index].src = soundUrls[index] || '';
+        audioRefs.current[index].play().catch(err => console.log('Audio play error:', err));
+      }
+    }
+    
+    setActiveSounds(newActiveSounds);
+  };
+
+  const handleVolumeChange = (index: number, value: number[]) => {
+    const newVolume = value[0];
+    setSoundVolumes(prev => ({...prev, [index]: newVolume}));
+    if (audioRefs.current[index]) {
+      audioRefs.current[index].volume = newVolume / 100;
+    }
   };
 
   const formatTime = (mins: number, secs: number) => {
@@ -96,12 +146,12 @@ const Index = () => {
   ];
 
   const sounds = [
-    { title: 'Дождь в лесу', icon: 'CloudRain', color: 'bg-lavender-200' },
-    { title: 'Океанские волны', icon: 'Waves', color: 'bg-blue-200' },
-    { title: 'Горный ручей', icon: 'Droplets', color: 'bg-cyan-200' },
-    { title: 'Птицы в саду', icon: 'Bird', color: 'bg-green-200' },
-    { title: 'Тихий ветер', icon: 'Wind', color: 'bg-lavender-100' },
-    { title: 'Костёр', icon: 'Flame', color: 'bg-peach-100' },
+    { title: 'Дождь в лесу', icon: 'CloudRain', color: 'bg-lavender-200', description: 'Успокаивающий звук дождя' },
+    { title: 'Океанские волны', icon: 'Waves', color: 'bg-blue-200', description: 'Шум прибоя' },
+    { title: 'Горный ручей', icon: 'Droplets', color: 'bg-cyan-200', description: 'Журчание воды' },
+    { title: 'Птицы в саду', icon: 'Bird', color: 'bg-green-200', description: 'Пение птиц' },
+    { title: 'Тихий ветер', icon: 'Wind', color: 'bg-lavender-100', description: 'Шелест листвы' },
+    { title: 'Костёр', icon: 'Flame', color: 'bg-peach-100', description: 'Треск костра' },
   ];
 
   return (
@@ -217,28 +267,76 @@ const Index = () => {
                   <Icon name="Volume2" size={24} className="text-green-500" />
                   Звуки природы
                 </CardTitle>
-                <CardDescription>Расслабьтесь под звуки природы</CardDescription>
+                <CardDescription>Расслабьтесь под звуки природы. Можно включать несколько звуков одновременно</CardDescription>
               </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <CardContent className="space-y-4">
+                <div className="grid gap-4">
                   {sounds.map((sound, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => toggleSound(idx)}
-                      className={`${sound.color} p-6 rounded-2xl flex flex-col items-center gap-3 transition-all shadow-md relative ${
-                        activeSoundIndex === idx ? 'ring-4 ring-lavender-400 scale-105' : 'hover:scale-105'
-                      }`}
-                    >
-                      {activeSoundIndex === idx && (
-                        <div className="absolute -top-2 -right-2 w-8 h-8 bg-lavender-500 rounded-full flex items-center justify-center animate-pulse">
-                          <Icon name="Volume2" size={16} className="text-white" />
+                    <div key={idx} className={`${sound.color} p-4 rounded-2xl transition-all shadow-md ${
+                      activeSounds.has(idx) ? 'ring-4 ring-lavender-400' : ''
+                    }`}>
+                      <div className="flex items-center gap-4">
+                        <button
+                          onClick={() => toggleSound(idx)}
+                          className="w-14 h-14 bg-white/60 rounded-xl flex items-center justify-center hover:bg-white/80 transition-all flex-shrink-0"
+                        >
+                          <Icon name={sound.icon as any} size={28} />
+                        </button>
+                        
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between mb-2">
+                            <div>
+                              <h4 className="font-medium text-sm">{sound.title}</h4>
+                              <p className="text-xs text-muted-foreground">{sound.description}</p>
+                            </div>
+                            {activeSounds.has(idx) && (
+                              <div className="flex items-center gap-2">
+                                <Icon name="Volume2" size={16} className="text-lavender-500 animate-pulse" />
+                                <span className="text-xs font-medium text-lavender-600">Играет</span>
+                              </div>
+                            )}
+                          </div>
+                          
+                          {activeSounds.has(idx) && (
+                            <div className="flex items-center gap-3">
+                              <Icon name="Volume" size={14} className="text-muted-foreground" />
+                              <Slider
+                                value={[soundVolumes[idx] || 50]}
+                                onValueChange={(value) => handleVolumeChange(idx, value)}
+                                max={100}
+                                step={1}
+                                className="flex-1"
+                              />
+                              <span className="text-xs text-muted-foreground w-8 text-right">
+                                {soundVolumes[idx] || 50}%
+                              </span>
+                            </div>
+                          )}
                         </div>
-                      )}
-                      <Icon name={sound.icon as any} size={32} />
-                      <span className="text-sm font-medium text-center">{sound.title}</span>
-                    </button>
+                      </div>
+                    </div>
                   ))}
                 </div>
+                
+                {activeSounds.size > 0 && (
+                  <div className="pt-4 border-t">
+                    <Button 
+                      variant="outline" 
+                      className="w-full"
+                      onClick={() => {
+                        activeSounds.forEach(idx => {
+                          if (audioRefs.current[idx]) {
+                            audioRefs.current[idx].pause();
+                          }
+                        });
+                        setActiveSounds(new Set());
+                      }}
+                    >
+                      <Icon name="StopCircle" size={18} className="mr-2" />
+                      Остановить все звуки
+                    </Button>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>

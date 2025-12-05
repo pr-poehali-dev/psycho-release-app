@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Icon from '@/components/ui/icon';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -15,8 +15,37 @@ const Index = () => {
   const [breathPhase, setBreathPhase] = useState<'inhale' | 'hold' | 'exhale'>('inhale');
   const [selectedMood, setSelectedMood] = useState<MoodType>(null);
   const [meditationTimer, setMeditationTimer] = useState(0);
+  const [meditationSeconds, setMeditationSeconds] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [showTrialModal, setShowTrialModal] = useState(false);
+  const [activeSoundIndex, setActiveSoundIndex] = useState<number | null>(null);
+  const meditationIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (isPlaying && (meditationTimer > 0 || meditationSeconds > 0)) {
+      meditationIntervalRef.current = setInterval(() => {
+        setMeditationSeconds((prev) => {
+          if (prev > 0) return prev - 1;
+          if (meditationTimer > 0) {
+            setMeditationTimer((t) => t - 1);
+            return 59;
+          }
+          setIsPlaying(false);
+          return 0;
+        });
+      }, 1000);
+    } else {
+      if (meditationIntervalRef.current) {
+        clearInterval(meditationIntervalRef.current);
+        meditationIntervalRef.current = null;
+      }
+    }
+    return () => {
+      if (meditationIntervalRef.current) {
+        clearInterval(meditationIntervalRef.current);
+      }
+    };
+  }, [isPlaying, meditationTimer, meditationSeconds]);
 
   const handleBreathingCycle = () => {
     setIsBreathingActive(!isBreathingActive);
@@ -32,6 +61,25 @@ const Index = () => {
     }
   };
 
+  const startMeditation = (durationMinutes: number) => {
+    setMeditationTimer(durationMinutes - 1);
+    setMeditationSeconds(59);
+    setIsPlaying(true);
+  };
+
+  const togglePlayPause = () => {
+    if (meditationTimer === 0 && meditationSeconds === 0) return;
+    setIsPlaying(!isPlaying);
+  };
+
+  const toggleSound = (index: number) => {
+    setActiveSoundIndex(activeSoundIndex === index ? null : index);
+  };
+
+  const formatTime = (mins: number, secs: number) => {
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
   const moods = [
     { type: 'amazing' as MoodType, emoji: '😊', label: 'Отлично' },
     { type: 'good' as MoodType, emoji: '🙂', label: 'Хорошо' },
@@ -41,10 +89,10 @@ const Index = () => {
   ];
 
   const meditations = [
-    { title: 'Утреннее пробуждение', duration: '10 мин', category: 'Энергия', icon: 'Sunrise' },
-    { title: 'Снятие стресса', duration: '15 мин', category: 'Релакс', icon: 'Cloud' },
-    { title: 'Вечерний покой', duration: '20 мин', category: 'Сон', icon: 'Moon' },
-    { title: 'Фокус и концентрация', duration: '12 мин', category: 'Работа', icon: 'Target' },
+    { title: 'Утреннее пробуждение', duration: 10, durationLabel: '10 мин', category: 'Энергия', icon: 'Sunrise' },
+    { title: 'Снятие стресса', duration: 15, durationLabel: '15 мин', category: 'Релакс', icon: 'Cloud' },
+    { title: 'Вечерний покой', duration: 20, durationLabel: '20 мин', category: 'Сон', icon: 'Moon' },
+    { title: 'Фокус и концентрация', duration: 12, durationLabel: '12 мин', category: 'Работа', icon: 'Target' },
   ];
 
   const sounds = [
@@ -176,8 +224,16 @@ const Index = () => {
                   {sounds.map((sound, idx) => (
                     <button
                       key={idx}
-                      className={`${sound.color} p-6 rounded-2xl flex flex-col items-center gap-3 hover:scale-105 transition-transform shadow-md`}
+                      onClick={() => toggleSound(idx)}
+                      className={`${sound.color} p-6 rounded-2xl flex flex-col items-center gap-3 transition-all shadow-md relative ${
+                        activeSoundIndex === idx ? 'ring-4 ring-lavender-400 scale-105' : 'hover:scale-105'
+                      }`}
                     >
+                      {activeSoundIndex === idx && (
+                        <div className="absolute -top-2 -right-2 w-8 h-8 bg-lavender-500 rounded-full flex items-center justify-center animate-pulse">
+                          <Icon name="Volume2" size={16} className="text-white" />
+                        </div>
+                      )}
                       <Icon name={sound.icon as any} size={32} />
                       <span className="text-sm font-medium text-center">{sound.title}</span>
                     </button>
@@ -189,15 +245,29 @@ const Index = () => {
 
           <TabsContent value="meditate" className="space-y-6 animate-fade-in">
             <Card className="bg-gradient-to-br from-lavender-300 to-lavender-400 text-white border-none shadow-xl">
-              <CardContent className="pt-6">
+              <CardContent className="pt-6 pb-6">
                 <div className="text-center space-y-4">
-                  <div className="w-24 h-24 mx-auto bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
-                    <Icon name="Play" size={40} />
-                  </div>
-                  <h3 className="text-2xl font-bold">
-                    {meditationTimer > 0 ? `${meditationTimer}:00` : 'Выберите медитацию'}
+                  <button
+                    onClick={togglePlayPause}
+                    className="w-24 h-24 mx-auto bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm hover:bg-white/30 transition-all cursor-pointer"
+                  >
+                    <Icon name={isPlaying ? "Pause" : "Play"} size={40} />
+                  </button>
+                  <h3 className="text-3xl font-bold font-mono">
+                    {(meditationTimer > 0 || meditationSeconds > 0) 
+                      ? formatTime(meditationTimer, meditationSeconds)
+                      : 'Выберите медитацию'
+                    }
                   </h3>
-                  <p className="text-lavender-50">Начните свою практику</p>
+                  <p className="text-lavender-50">
+                    {isPlaying ? 'Практика идёт...' : 'Начните свою практику'}
+                  </p>
+                  {(meditationTimer > 0 || meditationSeconds > 0) && (
+                    <Progress 
+                      value={((meditationTimer * 60 + meditationSeconds) / (20 * 60)) * 100} 
+                      className="w-full max-w-md mx-auto h-2"
+                    />
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -214,19 +284,16 @@ const Index = () => {
                         <h4 className="font-semibold text-lg">{med.title}</h4>
                         <div className="flex items-center gap-2 mt-1">
                           <Badge variant="outline" className="text-xs">{med.category}</Badge>
-                          <span className="text-sm text-muted-foreground">{med.duration}</span>
+                          <span className="text-sm text-muted-foreground">{med.durationLabel}</span>
                         </div>
                       </div>
                     </div>
                     <Button 
                       size="lg" 
                       className="rounded-full w-12 h-12 p-0"
-                      onClick={() => {
-                        setMeditationTimer(parseInt(med.duration));
-                        setIsPlaying(!isPlaying);
-                      }}
+                      onClick={() => startMeditation(med.duration)}
                     >
-                      <Icon name={isPlaying ? "Pause" : "Play"} size={20} />
+                      <Icon name="Play" size={20} />
                     </Button>
                   </CardContent>
                 </Card>
